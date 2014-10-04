@@ -1,14 +1,10 @@
 import os,sys
-try:
-    import zlock, h5_lock, h5py
-    zlock.set_client_process_name('runviewer')
-except:
-    print 'using new imports'
-    import zprocess.locking, labscript_utils.h5_lock, h5py
-    zprocess.locking.set_client_process_name('runviewer')
+import h5_lock, h5py
 
 from PyQt4 import QtGui, QtCore
 import pyqtgraph as pg
+
+
 
 from numpy import *
 
@@ -174,15 +170,8 @@ class FileAndDataOps(object):
         # parent is 'None' is the one we're interested in. It's clock is
         # our devices clock.
         while device_name != 'None':
-            if device_name != 'None' and self.connection_lookup[device_name] == 'trigger':
-                device_name = 'None'
-            else:
-                device_name = self.parent_lookup[device_name]
+            device_name = self.parent_lookup[device_name]
             ancestry.append(device_name)
-            # Parents that trigger the current device are not parents as far as clocking goes, 
-            # so set the parent device name as 'None'
-            
-                
         clocking_device = ancestry[-2]
         try:
             clock_type = self.connection_lookup[ancestry[-3]]
@@ -370,7 +359,7 @@ class FileAndDataOps(object):
         stop_time = clock[-1]
         self.to_plot[device_name] = []
         for i in range(2):
-            connection = (device_name, 'dds %d'%i)
+            connection = (device_name, 'channel %d'%i)
             if connection in self.name_lookup:
                 name = self.name_lookup[connection]
                 freqs = table_data['freq%d'%i]
@@ -502,14 +491,9 @@ class MainWindow(QtGui.QMainWindow):
         self.progress.setMaximum(sum([len(to_plot[outputclass]) for outputclass in to_plot]))
         progress_index = 0
         for index, outputclass in enumerate(sorted(to_plot)):
-            # no point making a tab if there are no channels on this device to plot
-            if len(to_plot[outputclass]) < 1:
-                continue
-                
             tab, layout = self.make_new_tab(outputclass)
             self.plots_by_tab[tab] = []
             self.tab_names_by_index[index] = outputclass
-            
             for i, line in enumerate(to_plot[outputclass]):
                 self.progress.setValue(progress_index)
                 progress_index += 1
@@ -534,7 +518,7 @@ class MainWindow(QtGui.QMainWindow):
                         
                 x = line['times']
                 y = line['data']
-                assert len(x) == len(y), '%d %d %s %s'%(len(x), len(y), outputclass, line['connection'])
+                assert len(x) == len(y), '%d %d %s'%(len(x), len(y), outputclass)
                 xnew, ynew = data_ops.resample(x, y, x[0], line['stop_time'], line['stop_time'])
                 plot = pw.plot(y=ynew,x=xnew)
                 pw.plotItem.setManualXScale()
