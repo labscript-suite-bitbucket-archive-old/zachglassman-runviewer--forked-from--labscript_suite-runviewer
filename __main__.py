@@ -212,6 +212,7 @@ class RunViewer(object):
         self._hidden_plot = (hidden_plot, hidden_plot_item)
         self.ui.plot_layout.addWidget(hidden_plot)
 
+        self._group_channel_bool = False
         # connect signals
         self.ui.reset_x_axis.clicked.connect(self.on_x_axis_reset)
         self.ui.reset_y_axis.clicked.connect(self.on_y_axes_reset)
@@ -221,6 +222,8 @@ class RunViewer(object):
         self.ui.channel_move_to_bottom.clicked.connect(self._move_bottom)
         self.ui.enable_selected_shots.clicked.connect(self._enable_selected_shots)
         self.ui.disable_selected_shots.clicked.connect(self._disable_selected_shots)
+        self.ui.group_channel.clicked.connect(self._group_channels)
+        self.ui.all_channels.clicked.connect(self._group_channels)
         self.ui.add_shot.clicked.connect(self.on_add_shot)
         if os.name == 'nt':
             self.ui.newWindow.connect(set_win_appusermodel)
@@ -230,6 +233,7 @@ class RunViewer(object):
         # internal variables
         #self._channels_list = {}
         self.plot_widgets = {}
+        self.all_plot_widgets = {}
         self.plot_items = {}
 
         # start resample thread
@@ -484,6 +488,49 @@ class RunViewer(object):
 
         self._resample = True
 
+    def _group_channels(self):
+        self._group_channel_bool = True
+        ticked_shots = self.get_selected_shots_and_colours()
+
+        # find stop time of longest ticked shot
+        largest_stop_time = 0
+        stop_time_set = False
+        for shot in ticked_shots.keys():
+            if shot.stop_time > largest_stop_time:
+                largest_stop_time = shot.stop_time
+                stop_time_set = True
+        if not stop_time_set:
+            largest_stop_time = 1.0
+
+
+        for shot, color in ticked_shots.items():
+            if shot in list(self.all_plot_widgets.keys()):
+                pass
+            else:
+                self.all_plot_widgets[shot] = pg.PlotWidget()
+                self.all_plot_widgets[shot].setMinimumHeight(200)
+                self.all_plot_widgets[shot].setMaximumHeight(200)
+                self.all_plot_widgets[shot].setTitle()
+                self.all_plot_widgets[shot].setLabel('top',shot.path.split('/')[-1])
+                self.all_plot_widgets[shot].setLabel('bottom', 'Time', units='s')
+                for channel in shot.traces:
+                    try:
+                        xmin, xmax, dx = self._get_resample_params(channel, shot)
+                        xnew, ynew = self.resample(shot.traces[channel][0],
+                                                   shot.traces[channel][1],
+                                                   xmin,
+                                                   xmax,
+                                                   shot.stop_time,
+                                                   dx)
+                        self.all_plot_widgets[shot].plot([0,0],[0], pen=pg.mkPen(QColor(colour), width=2), stepMode=True)
+                    except Exception:
+                        #self._resample = True
+                        pass
+
+            self.ui.all_plot_area.addWidget(self.all_plot_widgets[shot])
+            self._resample = True
+
+
     def create_plot(self, channel, ticked_shots):
         self.plot_widgets[channel] = pg.PlotWidget()#name=channel)
         self.plot_widgets[channel].setMinimumHeight(200)
@@ -503,6 +550,7 @@ class RunViewer(object):
                 plot_item = self.plot_widgets[channel].plot([0,0],[0], pen=pg.mkPen(QColor(colour), width=2), stepMode=True)
                 self.plot_items.setdefault(channel, {})
                 self.plot_items[channel][shot] = plot_item
+
 
                 if len(shot.traces[channel]) == 3:
                     has_units = True
@@ -750,6 +798,14 @@ class RunViewer(object):
                                 pass
                         else:
                             logger.info('ignoring channel %s'%channel)
+                if self._group_channel_bool:
+                    for shot, colour in ticked_shots.items():
+                        for channel in shot.traces:
+                            xmin, xmax, dx = self._get_resample_params(channel,shot)
+                            xnew, ynew = self.resample(shot.traces[channel][0], shot.traces[channel][1], xmin, xmax, shot.stop_time, dx)
+                            inmain(self.all_plot_widgets[shot].plot, xnew, ynew, pen=pg.mkPen(QColor(colour), width=2), stepMode=True)
+
+
             time.sleep(0.5)
 
     @inmain_decorator(wait_for_return=True)
