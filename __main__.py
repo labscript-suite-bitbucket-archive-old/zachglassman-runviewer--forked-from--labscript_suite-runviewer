@@ -235,6 +235,7 @@ class RunViewer(object):
         self.plot_widgets = {}
         self.all_plot_widgets = {}
         self.plot_items = {}
+        self.all_plot_items = {}
 
         # start resample thread
         self._resample = False
@@ -502,11 +503,15 @@ class RunViewer(object):
         if not stop_time_set:
             largest_stop_time = 1.0
 
+        print largest_stop_time
 
-        for shot, color in ticked_shots.items():
+
+        for shot, colour in ticked_shots.items():
             if shot in list(self.all_plot_widgets.keys()):
+                # already made the plot
                 pass
             else:
+                self.all_plot_items[shot] = {}
                 self.all_plot_widgets[shot] = pg.PlotWidget()
                 self.all_plot_widgets[shot].setMinimumHeight(200)
                 self.all_plot_widgets[shot].setMaximumHeight(200)
@@ -522,9 +527,10 @@ class RunViewer(object):
                                                    xmax,
                                                    shot.stop_time,
                                                    dx)
-                        self.all_plot_widgets[shot].plot([0,0],[0], pen=pg.mkPen(QColor(colour), width=2), stepMode=True)
+                        c_plot  = self.all_plot_widgets[shot].plot([0,0],[0], pen=pg.mkPen(QColor(colour), width=2), stepMode=True)
+                        self.all_plot_items[shot][channel] = c_plot
                     except Exception:
-                        #self._resample = True
+                        self._resample = True
                         pass
 
             self.ui.all_plot_area.addWidget(self.all_plot_widgets[shot])
@@ -783,27 +789,27 @@ class RunViewer(object):
                 ticked_shots = inmain(self.get_selected_shots_and_colours)
                 for shot, colour in ticked_shots.items():
                     for channel in shot.traces:
-                        if self.channel_checked_and_enabled(channel):
-                            try:
-                                xmin, xmax, dx = self._get_resample_params(channel,shot)
-
-                                # We go a bit outside the visible range so that scrolling
-                                # doesn't immediately go off the edge of the data, and the
-                                # next resampling might have time to fill in more data before
-                                # the user sees any empty space.
-                                xnew, ynew = self.resample(shot.traces[channel][0], shot.traces[channel][1], xmin, xmax, shot.stop_time, dx)
-                                inmain(self.plot_items[channel][shot].setData, xnew, ynew, pen=pg.mkPen(QColor(colour), width=2), stepMode=True)
-                            except Exception:
-                                #self._resample = True
-                                pass
-                        else:
-                            logger.info('ignoring channel %s'%channel)
-                if self._group_channel_bool:
-                    for shot, colour in ticked_shots.items():
-                        for channel in shot.traces:
+                        try:
                             xmin, xmax, dx = self._get_resample_params(channel,shot)
+                            # We go a bit outside the visible range so that scrolling
+                            # doesn't immediately go off the edge of the data, and the
+                            # next resampling might have time to fill in more data before
+                            # the user sees any empty space.
                             xnew, ynew = self.resample(shot.traces[channel][0], shot.traces[channel][1], xmin, xmax, shot.stop_time, dx)
-                            inmain(self.all_plot_widgets[shot].plot, xnew, ynew, pen=pg.mkPen(QColor(colour), width=2), stepMode=True)
+                            if self.channel_checked_and_enabled(channel):
+                                inmain(self.plot_items[channel][shot].setData, xnew, ynew, pen=pg.mkPen(QColor(colour), width=2), stepMode=True)
+                            else:
+                                logger.info('ignoring channel %s'%channel)
+
+                            if self._group_channel_bool:
+                                inmain(self.all_plot_items[shot][channel].setData, xnew, ynew, pen=pg.mkPen(QColor(colour), width=2), stepMode=True)
+
+
+                        except Exception:
+                            #self._resample = True
+                            pass
+
+
 
 
             time.sleep(0.5)
