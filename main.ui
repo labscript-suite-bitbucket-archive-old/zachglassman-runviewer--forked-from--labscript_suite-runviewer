@@ -96,6 +96,13 @@
                    </widget>
                   </item>
                   <item>
+                   <widget class="QPushButton" name="table_button">
+                    <property name="text">
+                     <string>Make Table</string>
+                    </property>
+                   </widget>
+                  </item>
+                  <item>
                    <spacer name="horizontalSpacer">
                     <property name="orientation">
                      <enum>Qt::Horizontal</enum>
@@ -354,7 +361,7 @@ V</string>
                   <rect>
                    <x>0</x>
                    <y>0</y>
-                   <width>470</width>
+                   <width>469</width>
                    <height>722</height>
                   </rect>
                  </property>
@@ -384,11 +391,7 @@ V</string>
        <attribute name="title">
         <string>Table</string>
        </attribute>
-       <layout class="QHBoxLayout" name="horizontalLayout_8">
-        <item>
-         <widget class="QTableWidget" name="tableWidget"/>
-        </item>
-       </layout>
+       <layout class="QHBoxLayout" name="horizontalLayout_8"/>
       </widget>
      </widget>
     </item>
