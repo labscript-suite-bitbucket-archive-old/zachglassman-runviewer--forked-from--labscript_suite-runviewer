@@ -226,6 +226,7 @@ class RunViewer(object):
         self.ui.group_channel.clicked.connect(self._group_channels)
         self.ui.all_channels.clicked.connect(self._prod_plot)
         self.ui.add_shot.clicked.connect(self.on_add_shot)
+        self.ui.table_button.clicked.connect(self._exp_table)
         if os.name == 'nt':
             self.ui.newWindow.connect(set_win_appusermodel)
 
@@ -552,56 +553,59 @@ class RunViewer(object):
     def _exp_table(self):
         """produce a table like setlist for viewing experiments"""
         ticked_shots = self.get_selected_shots_and_colours()
-        shot = list(ticked_shots.keys())[0]
+        shots = list(ticked_shots.keys())
+        for sn, shot in enumerate(shots):
+            #create new tab and tables
+            table = QTableWidget()
+            if sn == 0:
+                self.ui.tabWidget.removeTab(1)
 
-        keys, times, bk, nk = shot._make_table()
-        keys = ['Time','Difference'] + keys
-        self.ui.tableWidget.setRowCount(len(times))
-        self.ui.tableWidget.setColumnCount(len(keys))
-        #self.ui.tableWidget.setHorizontalHeaderLabels(keys)
-        key_labels = [i.replace('_','\n') for i in keys]
-        self.ui.tableWidget.setHorizontalHeaderLabels(key_labels)
-        # now set times
-        prev_time = 0
-        #indices of the traces so we don't need to look stupidly
-        ind = {key:0 for key in keys}
-        GREEN = QColor(0,255,0)
-        RED = QColor(255,0,0)
-        for i, time in enumerate(times):
-            self.ui.tableWidget.setItem(i,0, QTableWidgetItem("{:.4f}".format(time)))
-            self.ui.tableWidget.setItem(i,1, QTableWidgetItem(self._format_time(time-prev_time)))
-            #now loop through keys
-            for j, key in enumerate(keys[2:]):
-                if key in bk:
-                    val = shot._traces[key][1][i]
-                    #here every step is recorded on pulseblaster
-                    self.ui.tableWidget.setItem(i,2+j,QTableWidgetItem())
-                    if val > 0:
-                        self.ui.tableWidget.item(i,2+j).setBackground(GREEN)
+            self.ui.tabWidget.addTab(table, shot.path.split('\\')[-1])
+            keys, times, bk, nk = shot._make_table()
+            keys = ['Time','Difference'] + keys
+            table.setRowCount(len(times))
+            table.setColumnCount(len(keys))
+            #table.setHorizontalHeaderLabels(keys)
+            key_labels = [i.replace('_','\n') for i in keys]
+            table.setHorizontalHeaderLabels(key_labels)
+            # now set times
+            prev_time = 0
+            #indices of the traces so we don't need to look stupidly
+            ind = {key:0 for key in keys}
+            GREEN = QColor(0,255,0)
+            RED = QColor(255,0,0)
+            for i, time in enumerate(times):
+                table.setItem(i,0, QTableWidgetItem("{:.4f}".format(time)))
+                table.setItem(i,1, QTableWidgetItem(self._format_time(time-prev_time)))
+                #now loop through keys
+                for j, key in enumerate(keys[2:]):
+                    if key in bk:
+                        val = shot._traces[key][1][i]
+                        #here every step is recorded on pulseblaster
+                        table.setItem(i,2+j,QTableWidgetItem())
+                        if val > 0:
+                            table.item(i,2+j).setBackground(GREEN)
+                        else:
+                            table.item(i,2+j).setBackground(RED)
                     else:
-                        self.ui.tableWidget.item(i,2+j).setBackground(RED)
-                else:
-                    try:
-                        if shot._traces[key][0][ind[key]+1] < time:
-                            ind[key] += 1
-                    except:
-                        #at end of list
-                        pass
+                        try:
+                            if shot._traces[key][0][ind[key]+1] < time:
+                                ind[key] += 1
+                        except:
+                            #at end of list
+                            pass
 
-                    val = shot._traces[key][1][ind[key]]
-                    self.ui.tableWidget.setItem(i,2+j,
-                                                QTableWidgetItem("{:.2f}".format(val)))
+                        val = shot._traces[key][1][ind[key]]
+                        table.setItem(i,2+j,
+                                                    QTableWidgetItem("{:.2f}".format(val)))
 
-            prev_time = time
+                prev_time = time
 
-        self.ui.tableWidget.resizeColumnsToContents()
+            table.resizeColumnsToContents()
+        self.ui.tabWidget.setCurrentIndex(1)
+
 
     def _prod_plot(self):
-        self._exp_table()
-
-
-
-    def _prod_plots(self):
         """create production plot in matplotlib for each ticked shot"""
         from matplotlib.backends.backend_qt4agg import FigureCanvasQTAgg as FigureCanvas
         import matplotlib.pyplot as plt
