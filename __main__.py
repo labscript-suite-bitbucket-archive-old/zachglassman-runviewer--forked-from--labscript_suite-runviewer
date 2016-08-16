@@ -19,6 +19,7 @@ import logging
 import ctypes
 import socket
 from Queue import Queue
+from collections import OrderedDict
 
 import signal
 # Quit on ctrl-c
@@ -223,7 +224,7 @@ class RunViewer(object):
         self.ui.enable_selected_shots.clicked.connect(self._enable_selected_shots)
         self.ui.disable_selected_shots.clicked.connect(self._disable_selected_shots)
         self.ui.group_channel.clicked.connect(self._group_channels)
-        self.ui.all_channels.clicked.connect(self._group_channels)
+        self.ui.all_channels.clicked.connect(self._prod_plot)
         self.ui.add_shot.clicked.connect(self.on_add_shot)
         if os.name == 'nt':
             self.ui.newWindow.connect(set_win_appusermodel)
@@ -518,23 +519,125 @@ class RunViewer(object):
                 self.all_plot_widgets[shot].setTitle()
                 self.all_plot_widgets[shot].setLabel('top',shot.path.split('/')[-1])
                 self.all_plot_widgets[shot].setLabel('bottom', 'Time', units='s')
-                for channel in shot.traces:
-                    try:
-                        xmin, xmax, dx = self._get_resample_params(channel, shot)
-                        xnew, ynew = self.resample(shot.traces[channel][0],
-                                                   shot.traces[channel][1],
-                                                   xmin,
-                                                   xmax,
-                                                   shot.stop_time,
-                                                   dx)
-                        c_plot  = self.all_plot_widgets[shot].plot([0,0],[0], pen=pg.mkPen(QColor(colour), width=2), stepMode=True)
-                        self.all_plot_items[shot][channel] = c_plot
-                    except Exception:
-                        self._resample = True
-                        pass
+
+            # now make a trace for each channel, but let resample function
+            # plot them
+            for channel in shot.traces:
+                try:
+                    xmin, xmax, dx = self._get_resample_params(channel, shot)
+                    xnew, ynew = self.resample(shot.traces[channel][0],
+                                               shot.traces[channel][1],
+                                               xmin,
+                                               xmax,
+                                               shot.stop_time,
+                                               dx)
+                    c_plot  = self.all_plot_widgets[shot].plot([0,0],[0], pen=pg.mkPen(QColor(colour), width=2), stepMode=True)
+                    self.all_plot_items[shot][channel] = c_plot
+                except Exception:
+                    self._resample = True
+                    pass
 
             self.ui.all_plot_area.addWidget(self.all_plot_widgets[shot])
             self._resample = True
+
+    def _format_time(self,t):
+        """return time in pretty formats"""
+        if t < 1 and t >= .001:
+            return "{:.4f} ms".format(t*1e3)
+        elif t < .001:
+            return "{:.4f} mus".format(t*1e6)
+        else:
+            return "{:.4f} s".format(t)
+
+    def _exp_table(self):
+        """produce a table like setlist for viewing experiments"""
+        ticked_shots = self.get_selected_shots_and_colours()
+        shot = list(ticked_shots.keys())[0]
+
+        keys, times, bk, nk = shot._make_table()
+        keys = ['Time','Difference'] + keys
+        self.ui.tableWidget.setRowCount(len(times))
+        self.ui.tableWidget.setColumnCount(len(keys))
+        #self.ui.tableWidget.setHorizontalHeaderLabels(keys)
+        key_labels = [i.replace('_','\n') for i in keys]
+        self.ui.tableWidget.setHorizontalHeaderLabels(key_labels)
+        # now set times
+        prev_time = 0
+        #indices of the traces so we don't need to look stupidly
+        ind = {key:0 for key in keys}
+        GREEN = QColor(0,255,0)
+        RED = QColor(255,0,0)
+        for i, time in enumerate(times):
+            self.ui.tableWidget.setItem(i,0, QTableWidgetItem("{:.4f}".format(time)))
+            self.ui.tableWidget.setItem(i,1, QTableWidgetItem(self._format_time(time-prev_time)))
+            #now loop through keys
+            for j, key in enumerate(keys[2:]):
+                if key in bk:
+                    val = shot._traces[key][1][i]
+                    #here every step is recorded on pulseblaster
+                    self.ui.tableWidget.setItem(i,2+j,QTableWidgetItem())
+                    if val > 0:
+                        self.ui.tableWidget.item(i,2+j).setBackground(GREEN)
+                    else:
+                        self.ui.tableWidget.item(i,2+j).setBackground(RED)
+                else:
+                    try:
+                        if shot._traces[key][0][ind[key]+1] < time:
+                            ind[key] += 1
+                    except:
+                        #at end of list
+                        pass
+
+                    val = shot._traces[key][1][ind[key]]
+                    self.ui.tableWidget.setItem(i,2+j,
+                                                QTableWidgetItem("{:.2f}".format(val)))
+
+            prev_time = time
+
+        self.ui.tableWidget.resizeColumnsToContents()
+
+    def _prod_plot(self):
+        self._exp_table()
+
+
+
+    def _prod_plots(self):
+        """create production plot in matplotlib for each ticked shot"""
+        from matplotlib.backends.backend_qt4agg import FigureCanvasQTAgg as FigureCanvas
+        import matplotlib.pyplot as plt
+        import numpy as np
+        plt.ion()
+        ticked_shots = self.get_selected_shots_and_colours()
+
+
+        self.figure = [plt.figure() for i in range(len(ticked_shots))]
+
+        # this is the Canvas Widget that displays the `figure`
+        # it takes the `figure` instance as a parameter to __init__
+        self.canvas = [FigureCanvas(i) for i in self.figure]
+        ax = [i.add_subplot(111) for i in self.figure]
+
+        # only plot things that change
+        for i, (shot, colour) in enumerate(ticked_shots.items()):
+            for channel in shot.traces:
+                xmin, xmax, dx = self._get_resample_params(channel,shot)
+                xnew, ynew = self.resample(shot.traces[channel][0], shot.traces[channel][1], xmin, xmax, shot.stop_time, dx)
+                # now we check for unique non inf members and sum this list
+                # non inf are boolean 1, so if greater than 1 it changes,
+                # we will only plot things that change
+                # numpy will treat boolean as 1,0 when summing
+                if np.isfinite(np.unique(ynew)).sum() > 1:
+                    ax[i].plot(xnew[:-1],ynew,label = channel)
+            ax[i].legend(loc='best')
+
+            self.canvas[i].draw()
+
+        plt.show()
+        #path = r'C:\Users\Administrator\Documents\TESTING'
+        #import os
+        #plt.savefig(os.path.join(path,'testfig.png'))
+
+
 
 
     def create_plot(self, channel, ticked_shots):
@@ -781,6 +884,9 @@ class RunViewer(object):
         return y_out
 
     def _resample_thread(self):
+        """ make the plots by resampling points, also remake group plots,
+            only do those which are selected.
+        """
         logger = logging.getLogger('runviewer.resample_thread')
         while True:
             if self._resample:
@@ -789,25 +895,26 @@ class RunViewer(object):
                 ticked_shots = inmain(self.get_selected_shots_and_colours)
                 for shot, colour in ticked_shots.items():
                     for channel in shot.traces:
-                        try:
-                            xmin, xmax, dx = self._get_resample_params(channel,shot)
-                            # We go a bit outside the visible range so that scrolling
-                            # doesn't immediately go off the edge of the data, and the
-                            # next resampling might have time to fill in more data before
-                            # the user sees any empty space.
-                            xnew, ynew = self.resample(shot.traces[channel][0], shot.traces[channel][1], xmin, xmax, shot.stop_time, dx)
-                            if self.channel_checked_and_enabled(channel):
+                        if self.channel_checked_and_enabled(channel):
+                            try:
+                                xmin, xmax, dx = self._get_resample_params(channel,shot)
+                                # We go a bit outside the visible range so that scrolling
+                                # doesn't immediately go off the edge of the data, and the
+                                # next resampling might have time to fill in more data before
+                                # the user sees any empty space.
+                                xnew, ynew = self.resample(shot.traces[channel][0], shot.traces[channel][1], xmin, xmax, shot.stop_time, dx)
                                 inmain(self.plot_items[channel][shot].setData, xnew, ynew, pen=pg.mkPen(QColor(colour), width=2), stepMode=True)
-                            else:
-                                logger.info('ignoring channel %s'%channel)
 
-                            if self._group_channel_bool:
-                                inmain(self.all_plot_items[shot][channel].setData, xnew, ynew, pen=pg.mkPen(QColor(colour), width=2), stepMode=True)
+                                if self._group_channel_bool:
+                                    inmain(self.all_plot_items[shot][channel].setData, xnew, ynew, pen=pg.mkPen(QColor(colour), width=2), stepMode=True)
 
 
-                        except Exception:
-                            #self._resample = True
-                            pass
+
+                            except Exception:
+                                #self._resample = True
+                                pass
+                        else:
+                            logger.info('ignoring channel %s'%channel)
 
 
 
@@ -1045,6 +1152,32 @@ class Shot(object):
         if self._traces is None:
             self._load()
         return self._traces
+
+    def _get_key_list(self):
+        pb_dict = {k:v for k,v in self._channels.iteritems() if 'pulseblaster_0' in v['device_name']}
+        ao_dict = {k:v for k,v in self._channels.iteritems() if 'pulseblaster_0' not in v['device_name']}
+
+        ao_devices = sorted(list(set(val['device_name'] for val in ao_dict.values())))
+        ao_dicts = [{k:v for k,v in ao_dict.iteritems() if v['device_name'] == name} for name in ao_devices]
+
+        pb_sort = OrderedDict(sorted(pb_dict.iteritems(), key=lambda x: int(x[1]['port'].split()[1])))
+        ao_sort = [OrderedDict(sorted(ao_dict.iteritems(), key=lambda x: int(x[1]['port'].lstrip('ao')))) for ao_dict in ao_dicts]
+        list_of_keys = pb_sort.keys()
+        for i in ao_sort:
+            list_of_keys += i.keys()
+        return list_of_keys, list(pb_sort.keys()), list(ao_dict.keys())
+
+    def _get_unique_times(self):
+        set_of_times = set()
+        for trace in self._traces.values():
+            times = trace[0]
+            set_of_times = set_of_times.union(trace[0])
+        return sorted(set_of_times)
+
+    def _make_table(self):
+        keys,bool_key, num_key = self._get_key_list()
+        times = self._get_unique_times()
+        return keys, times, bool_key, num_key
 
 
 class TempShot(Shot):
