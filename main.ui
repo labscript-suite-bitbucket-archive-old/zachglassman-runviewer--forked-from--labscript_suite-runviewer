@@ -98,7 +98,7 @@
                   <item>
                    <widget class="QPushButton" name="table_button">
                     <property name="text">
-                     <string>Make Table</string>
+                     <string>All Shots Table</string>
                     </property>
                    </widget>
                   </item>
@@ -276,7 +276,7 @@ V</string>
                 <rect>
                  <x>0</x>
                  <y>0</y>
-                 <width>472</width>
+                 <width>471</width>
                  <height>724</height>
                 </rect>
                </property>
@@ -361,7 +361,7 @@ V</string>
                   <rect>
                    <x>0</x>
                    <y>0</y>
-                   <width>469</width>
+                   <width>468</width>
                    <height>722</height>
                   </rect>
                  </property>
