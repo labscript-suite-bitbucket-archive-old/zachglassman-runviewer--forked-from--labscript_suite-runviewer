@@ -587,13 +587,13 @@ class RunViewer(object):
         key_labels = [i.replace('_','\n') for i in keys]
         table.setHorizontalHeaderLabels(key_labels)
         # now set times
-        prev_time = 0
+
         #indices of the traces so we don't need to look stupidly
         ind = {key:0 for key in keys}
-
+        next_time = numpy.append(times[1:],numpy.nan)
         for i, time in enumerate(times):
             table.setItem(i,0, QTableWidgetItem("{:.4f}".format(time)))
-            table.setItem(i,1, QTableWidgetItem(self._format_time(time-prev_time)))
+            table.setItem(i,1, QTableWidgetItem(self._format_time(next_time[i]-time)))
             #now loop through keys
             for j, key in enumerate(keys[2:]):
                 if key in bk:
@@ -626,7 +626,6 @@ class RunViewer(object):
                 else:
                     table.item(i,2+j).setBackground(C2)
 
-            prev_time = time
 
         table.resizeColumnsToContents()
 
