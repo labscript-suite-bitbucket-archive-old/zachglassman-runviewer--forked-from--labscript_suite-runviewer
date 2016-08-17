@@ -558,13 +558,11 @@ class RunViewer(object):
         pixmap_off = QPixmap('table_icon_off.png')
         C1 = QColor(215,241,250)
         C2 = QColor(245,238,193)
-
+        #remove tabe thats there
+        self.ui.tabWidget.removeTab(1)
         for sn, shot in enumerate(shots):
             #create new tab and tables
             table = QTableWidget()
-            if sn == 0:
-                self.ui.tabWidget.removeTab(1)
-
             self.ui.tabWidget.addTab(table, shot.path.split('\\')[-1])
             keys, times, bk, nk = shot._make_table()
             keys = ['Time','Difference'] + keys
