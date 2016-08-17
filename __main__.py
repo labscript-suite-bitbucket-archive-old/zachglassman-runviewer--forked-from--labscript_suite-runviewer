@@ -544,16 +544,21 @@ class RunViewer(object):
     def _format_time(self,t):
         """return time in pretty formats"""
         if t < 1 and t >= .001:
-            return "{:.4f} ms".format(t*1e3)
+            return "{:.2f} ms".format(t*1e3)
         elif t < .001:
-            return "{:.4f} mus".format(t*1e6)
+            return u"{0:.2f} {1}s".format(t*1e6, u"\u03BC")
         else:
-            return "{:.4f} s".format(t)
+            return "{:.2f} s".format(t)
 
     def _exp_table(self):
         """produce a table like setlist for viewing experiments"""
         ticked_shots = self.get_selected_shots_and_colours()
         shots = list(ticked_shots.keys())
+        pixmap_on = QPixmap('table_icon.png')
+        pixmap_off = QPixmap('table_icon_off.png')
+        C1 = QColor(215,241,250)
+        C2 = QColor(245,238,193)
+
         for sn, shot in enumerate(shots):
             #create new tab and tables
             table = QTableWidget()
@@ -572,8 +577,7 @@ class RunViewer(object):
             prev_time = 0
             #indices of the traces so we don't need to look stupidly
             ind = {key:0 for key in keys}
-            GREEN = QColor(0,255,0)
-            RED = QColor(255,0,0)
+
             for i, time in enumerate(times):
                 table.setItem(i,0, QTableWidgetItem("{:.4f}".format(time)))
                 table.setItem(i,1, QTableWidgetItem(self._format_time(time-prev_time)))
@@ -582,11 +586,16 @@ class RunViewer(object):
                     if key in bk:
                         val = shot._traces[key][1][i]
                         #here every step is recorded on pulseblaster
-                        table.setItem(i,2+j,QTableWidgetItem())
+                        #table.setItem(i,2+j,QTableWidgetItem())
+                        item = QTableWidgetItem()
+                        icon = QIcon()
                         if val > 0:
-                            table.item(i,2+j).setBackground(GREEN)
+                            icon.addPixmap(pixmap_on)
                         else:
-                            table.item(i,2+j).setBackground(RED)
+                            icon.addPixmap(pixmap_off)
+                        item.setIcon(icon)
+                        table.setItem(i,2+j,item)
+
                     else:
                         try:
                             if shot._traces[key][0][ind[key]+1] < time:
@@ -597,7 +606,12 @@ class RunViewer(object):
 
                         val = shot._traces[key][1][ind[key]]
                         table.setItem(i,2+j,
-                                                    QTableWidgetItem("{:.2f}".format(val)))
+                                      QTableWidgetItem("{:.2f}".format(val)))
+                        # alternate row colors for easier viewing
+                    if i %2 ==0:
+                        table.item(i,2+j).setBackground(C1)
+                    else:
+                        table.item(i,2+j).setBackground(C2)
 
                 prev_time = time
 
